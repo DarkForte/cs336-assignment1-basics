@@ -2,6 +2,7 @@ import os
 from typing import BinaryIO
 import regex as re
 from collections import defaultdict
+import cProfile
 
 def find_chunk_boundaries(
     file: BinaryIO, 
@@ -89,13 +90,15 @@ def bpe(input_path, vocab_size, special_tokens):
 
     while len(vocab) < vocab_size:
         pair_count = defaultdict(int)
+        pair_to_byte_list = defaultdict(set)
         for byte_list, count in byte_count.items():
             for i in range(len(byte_list) - 1):
                 pair_count[(byte_list[i], byte_list[i+1])] += count
+                pair_to_byte_list[(byte_list[i], byte_list[i+1])].add(byte_list)
     
         max_count = 0
-        merging_pair = None
-        merging_bytes = None
+        merging_pair = tuple()
+        merging_bytes = bytes()
         for key, value in pair_count.items():
             if value > max_count or (value == max_count and key > merging_pair):
                 max_count = value
@@ -106,8 +109,10 @@ def bpe(input_path, vocab_size, special_tokens):
         vocab[p_vocab] = merging_bytes
         p_vocab += 1
 
-        new_byte_count = defaultdict(int)
-        for byte_list, count in byte_count.items():
+        for byte_list in pair_to_byte_list[merging_pair]:
+            count = byte_count[byte_list]
+            del byte_count[byte_list]
+
             now_byte_list = []
             i = 0
             while i < len(byte_list):
@@ -117,10 +122,11 @@ def bpe(input_path, vocab_size, special_tokens):
                 else:
                     now_byte_list.append(byte_list[i])
                 i += 1
-            new_byte_count[tuple(now_byte_list)] += count
-        
-        byte_count = new_byte_count
+            
+            byte_count[tuple(now_byte_list)] = count
+
     return vocab, merges
 
-#print(bpe("data/small.txt", 256+6, ["<|endoftext|>"]))
-print(bpe("tests/fixtures/tinystories_sample_5M.txt", 256+450, ["<|endoftext|>"]))
+#bpe("data/small.txt", 256+6, ["<|endoftext|>"])
+#bpe('tests/fixtures/tinystories_sample_5M.txt', 256+450, ['<|endoftext|>'])
+bpe('/home/darkforte/cs336/assignment-1/tests/fixtures/corpus.en', 256+450, ['<|endoftext|>'])
