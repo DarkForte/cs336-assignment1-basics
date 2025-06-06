@@ -75,6 +75,31 @@ def pre_tokenize(path: str, special_tokens: list):
                     word_count[word.group()] += 1
     return word_count
 
+def calc_new_byte_list(byte_list, merging_pair):
+    """
+    Calculate the new byte list after merging a pair of bytes.
+    """
+    new_byte_list = []
+    i = 0
+    while i < len(byte_list):
+        if i < len(byte_list) - 1 and (byte_list[i], byte_list[i + 1]) == merging_pair:
+            new_byte_list.append(merging_pair[0] + merging_pair[1])
+            i += 2  # Skip the next byte since it's merged
+        else:
+            new_byte_list.append(byte_list[i])
+            i += 1
+    return tuple(new_byte_list)
+
+def count_pairs(byte_list):
+    """
+    Count pairs of bytes in the byte list.
+    Returns a dictionary with pairs as keys and their counts as values.
+    """
+    pair_count = defaultdict(int)
+    for i in range(len(byte_list) - 1):
+        pair_count[(byte_list[i], byte_list[i + 1])] += 1
+    return pair_count
+
 
 def bpe(input_path, vocab_size, special_tokens):
     word_count = pre_tokenize(input_path, special_tokens)
@@ -88,14 +113,16 @@ def bpe(input_path, vocab_size, special_tokens):
                  + [(256 + i, special_token.encode("utf-8")) for i, special_token in enumerate(special_tokens)])
     p_vocab = len(vocab)
 
+    pair_count = defaultdict(int)
+    pair_to_byte_list = defaultdict(set)
+    current_byte_list = {}
+    for byte_list, count in byte_count.items():
+        current_byte_list[byte_list] = byte_list
+        for i in range(len(byte_list) - 1):
+            pair_count[(byte_list[i], byte_list[i+1])] += count
+            pair_to_byte_list[(byte_list[i], byte_list[i+1])].add(byte_list)
+
     while len(vocab) < vocab_size:
-        pair_count = defaultdict(int)
-        pair_to_byte_list = defaultdict(set)
-        for byte_list, count in byte_count.items():
-            for i in range(len(byte_list) - 1):
-                pair_count[(byte_list[i], byte_list[i+1])] += count
-                pair_to_byte_list[(byte_list[i], byte_list[i+1])].add(byte_list)
-    
         max_count = 0
         merging_pair = tuple()
         merging_bytes = bytes()
@@ -103,30 +130,34 @@ def bpe(input_path, vocab_size, special_tokens):
             if value > max_count or (value == max_count and key > merging_pair):
                 max_count = value
                 merging_pair = key
-                merging_bytes = merging_pair[0][:] + merging_pair[1][:]
+                merging_bytes = merging_pair[0] + merging_pair[1]
 
         merges.append(merging_pair)
         vocab[p_vocab] = merging_bytes
         p_vocab += 1
 
-        for byte_list in pair_to_byte_list[merging_pair]:
-            count = byte_count[byte_list]
-            del byte_count[byte_list]
+        new_pair_index = defaultdict(set)
+        for byte_list_raw in pair_to_byte_list[merging_pair]:
+            count = byte_count[byte_list_raw]
+            byte_list = current_byte_list[byte_list_raw]
+            new_byte_list = calc_new_byte_list(byte_list, merging_pair)
+            current_byte_list[byte_list_raw] = new_byte_list
 
-            now_byte_list = []
-            i = 0
-            while i < len(byte_list):
-                if(i + 1 < len(byte_list) and byte_list[i] == merging_pair[0] and byte_list[i+1] == merging_pair[1]):
-                    now_byte_list.append(merging_bytes)
-                    i += 1
-                else:
-                    now_byte_list.append(byte_list[i])
-                i += 1
-            
-            byte_count[tuple(now_byte_list)] = count
+            old_pair_count = count_pairs(byte_list)
+            new_pair_count = count_pairs(new_byte_list)
+            for pair, value in old_pair_count.items():
+                pair_count[pair] -= value * count
+            for pair, value in new_pair_count.items():
+                pair_count[pair] += value * count
+                new_pair_index[pair].add(byte_list_raw)
+        
+        del pair_to_byte_list[merging_pair]
+        for pair, byte_lists in new_pair_index.items():
+            if pair not in pair_to_byte_list:
+                pair_to_byte_list[pair] = new_pair_index[pair]            
 
     return vocab, merges
 
-#bpe("data/small.txt", 256+6, ["<|endoftext|>"])
+#print(bpe("data/small.txt", 256+7, ["<|endoftext|>"]))
 #bpe('tests/fixtures/tinystories_sample_5M.txt', 256+450, ['<|endoftext|>'])
-bpe('/home/darkforte/cs336/assignment-1/tests/fixtures/corpus.en', 256+450, ['<|endoftext|>'])
+#bpe('/home/darkforte/cs336/assignment-1/tests/fixtures/corpus.en', 256+450, ['<|endoftext|>'])
