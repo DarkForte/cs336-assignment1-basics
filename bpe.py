@@ -2,6 +2,7 @@ import os
 from typing import BinaryIO
 import regex as re
 from collections import defaultdict
+import multiprocessing as mp
 import cProfile
 
 def find_chunk_boundaries(
@@ -52,27 +53,36 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
+def count_words(path, start, end, special_tokens):
+    with open(path, "rb") as f:
+        word_count = defaultdict(int)
+        f.seek(start)
+        chunk = f.read(end - start).decode("utf-8", errors="ignore").replace("\r\n", "\n")
 
+        # Remove all special tokens
+        for clean_chunk in re.split("|".join([re.escape(x) for x in special_tokens]), chunk):
+            # Run pre-tokenization on your chunk and store the counts for each pre-token
+            PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+            for word in re.finditer(PAT, clean_chunk):
+            #for word in re.split(" |\n", clean_chunk):
+                word_count[word.group()] += 1
+
+    return word_count
 
 def pre_tokenize(path: str, special_tokens: list):
+    process_count = mp.cpu_count()
     with open(path, "rb") as f:
-        boundaries = find_chunk_boundaries(f, 1, special_tokens[0].encode("utf-8"))
-            
-        # The following is a serial implementation, but you can parallelize this 
-        # by sending each start/end pair to a set of processes.
-        word_count = defaultdict(int)
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore").replace("\r\n", "\n")
+        boundaries = find_chunk_boundaries(f, process_count, special_tokens[0].encode("utf-8"))
+    
+    word_count = defaultdict(int)
+    with mp.Pool(process_count) as pool:
+        partition_word_counts = pool.starmap(count_words, 
+            [(path, start, end, special_tokens) for start, end in zip(boundaries[:-1], boundaries[1:])])
+        # Combine the results from all partitions
+        for partition in partition_word_counts:
+            for word, count in partition.items():
+                word_count[word] += count
 
-            # Remove all special tokens
-            for clean_chunk in re.split("|".join([re.escape(x) for x in special_tokens]), chunk):
-
-                # Run pre-tokenization on your chunk and store the counts for each pre-token
-                PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-                for word in re.finditer(PAT, clean_chunk):
-                #for word in re.split(" |\n", clean_chunk):
-                    word_count[word.group()] += 1
     return word_count
 
 def calc_new_byte_list(byte_list, merging_pair):
@@ -158,6 +168,20 @@ def bpe(input_path, vocab_size, special_tokens):
 
     return vocab, merges
 
-#print(bpe("data/small.txt", 256+7, ["<|endoftext|>"]))
-#bpe('tests/fixtures/tinystories_sample_5M.txt', 256+450, ['<|endoftext|>'])
-#bpe('/home/darkforte/cs336/assignment-1/tests/fixtures/corpus.en', 256+450, ['<|endoftext|>'])
+if __name__ == "__main__":
+    import sys
+    vocab, merges = bpe(input_path=sys.argv[1], 
+                        vocab_size=int(sys.argv[2]), 
+                        special_tokens=["<|endoftext|>"])
+
+    import pickle
+
+    with open("vocab.pickle", "wb") as f:
+        pickle.dump(vocab, f)
+    
+    with open("merges.pickle", "wb") as f:
+        pickle.dump(merges, f)
+
+    #print(bpe("data/small.txt", 10000, ["<|endoftext|>"]))
+    #bpe('tests/fixtures/tinystories_sample_5M.txt', 256+450, ['<|endoftext|>'])
+    #bpe('/home/darkforte/cs336/assignment-1/tests/fixtures/corpus.en', 256+450, ['<|endoftext|>'])
