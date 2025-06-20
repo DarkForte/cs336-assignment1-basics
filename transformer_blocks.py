@@ -2,6 +2,7 @@ import torch
 import einops
 import math
 from typing import Optional
+from utils import softmax
 
 class Linear(torch.nn.Module):
     def __init__(self, in_features: int, out_features: int, device=None, dtype=None):
@@ -85,15 +86,6 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         unrolled_x = einops.rearrange(x, '... seq_len (d_k p)-> ... seq_len d_k p', p=2)
         rotated_x = einops.einsum(unrolled_x, r, '... seq_len d_k p1, ... seq_len d_k p1 p2 -> ... seq_len d_k p2')
         return einops.rearrange(rotated_x, '... seq_len d_k p -> ... seq_len (d_k p)', p=2)
-
-def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
-    """
-    Computes the softmax of the input tensor along the specified dimension.
-    """
-    max_x = torch.max(x, dim=dim, keepdim=True).values
-    exp_x = torch.exp(x - max_x)
-    sum_exp_x = torch.sum(exp_x, dim=dim, keepdim=True)
-    return exp_x / sum_exp_x
 
 
 def scaled_dot_product_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
