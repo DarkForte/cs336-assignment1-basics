@@ -54,34 +54,45 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 def count_words(path, start, end, special_tokens):
+    print("start:", start)
+    print("end:", end)
     with open(path, "rb") as f:
         word_count = defaultdict(int)
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore").replace("\r\n", "\n")
+        print("File read complete")
 
-        # Remove all special tokens
-        for clean_chunk in re.split("|".join([re.escape(x) for x in special_tokens]), chunk):
-            # Run pre-tokenization on your chunk and store the counts for each pre-token
-            PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-            for word in re.finditer(PAT, clean_chunk):
-            #for word in re.split(" |\n", clean_chunk):
-                word_count[word.group()] += 1
+        # Combine special tokens into a single regex pattern for splitting
+        special_tokens_pattern = "|".join([re.escape(x) for x in special_tokens])
+        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
+        # Find all words and special tokens in the chunk
+        # Iterate through matches and only count if it's not a special token
+        for match in re.finditer(f'({PAT}|{special_tokens_pattern})', chunk):
+            word = match.group(0)
+            if word not in special_tokens:
+                 word_count[word] += 1
+    print("count word complete")
     return word_count
 
 def pre_tokenize(path: str, special_tokens: list):
-    process_count = mp.cpu_count()
+    process_count = 128
+    print("process_count:", process_count)
     with open(path, "rb") as f:
         boundaries = find_chunk_boundaries(f, process_count, special_tokens[0].encode("utf-8"))
-    
+
+    print("boundaries:", boundaries)
     word_count = defaultdict(int)
-    with mp.Pool(process_count) as pool:
-        partition_word_counts = pool.starmap(count_words, 
-            [(path, start, end, special_tokens) for start, end in zip(boundaries[:-1], boundaries[1:])])
-        # Combine the results from all partitions
-        for partition in partition_word_counts:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=process_count) as executor:
+        print("initialized thread pool with {} workers".format(process_count))
+        future_to_chunk = {executor.submit(count_words, path, start, end, special_tokens): (start, end) for start, end in zip(boundaries[:-1], boundaries[1:])}
+        for future in concurrent.futures.as_completed(future_to_chunk):
+            chunk_info = future_to_chunk[future]
+            partition = future.result()
+            # Combine the results from all partitions
             for word, count in partition.items():
                 word_count[word] += count
+
 
     return word_count
 
