@@ -2,7 +2,7 @@ import os
 from typing import BinaryIO
 import regex as re
 from collections import defaultdict
-import multiprocessing as mp
+import concurrent
 import cProfile
 
 def find_chunk_boundaries(
@@ -54,36 +54,33 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 def count_words(path, start, end, special_tokens):
-    print("start:", start)
-    print("end:", end)
+    #print("start:", start)
+    #print("end:", end)
     with open(path, "rb") as f:
         word_count = defaultdict(int)
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore").replace("\r\n", "\n")
-        print("File read complete")
+        #print("File read complete")
 
-        # Combine special tokens into a single regex pattern for splitting
-        special_tokens_pattern = "|".join([re.escape(x) for x in special_tokens])
         PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-
-        # Find all words and special tokens in the chunk
-        # Iterate through matches and only count if it's not a special token
-        for match in re.finditer(f'({PAT}|{special_tokens_pattern})', chunk):
-            word = match.group(0)
-            if word not in special_tokens:
-                 word_count[word] += 1
+        # Remove all special tokens
+        for clean_chunk in re.split("|".join([re.escape(x) for x in special_tokens]), chunk):
+            # Run pre-tokenization on your chunk and store the counts for each pre-token
+            for word in re.finditer(PAT, clean_chunk):
+            #for word in re.split(" |\n", clean_chunk):
+                word_count[word.group()] += 1
     print("count word complete")
     return word_count
 
 def pre_tokenize(path: str, special_tokens: list):
-    process_count = 128
+    process_count = os.cpu_count() or 1
     print("process_count:", process_count)
     with open(path, "rb") as f:
         boundaries = find_chunk_boundaries(f, process_count, special_tokens[0].encode("utf-8"))
 
-    print("boundaries:", boundaries)
+    #print("boundaries:", boundaries)
     word_count = defaultdict(int)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=process_count) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=process_count) as executor:
         print("initialized thread pool with {} workers".format(process_count))
         future_to_chunk = {executor.submit(count_words, path, start, end, special_tokens): (start, end) for start, end in zip(boundaries[:-1], boundaries[1:])}
         for future in concurrent.futures.as_completed(future_to_chunk):
@@ -173,7 +170,7 @@ def bpe(input_path, vocab_size, special_tokens):
                 new_pair_index[pair].add(byte_list_raw)
         
         del pair_to_byte_list[merging_pair]
-        for pair, byte_lists in new_pair_index.items():
+        for pair, _ in new_pair_index.items():
             if pair not in pair_to_byte_list:
                 pair_to_byte_list[pair] = new_pair_index[pair]            
 
