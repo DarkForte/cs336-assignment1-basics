@@ -2,7 +2,7 @@ import os
 from typing import BinaryIO
 import regex as re
 from collections import defaultdict
-import concurrent
+import concurrent.futures
 import cProfile
 
 def find_chunk_boundaries(

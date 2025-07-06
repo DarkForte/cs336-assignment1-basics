@@ -6,6 +6,3 @@ with open("merges.pickle", "rb") as f:
 print("Vocabulary:")
 for k, v in vocab.items():
     print(f"{k}: {v}")
-print("\nMerges:")
-for merge in merges:
-    print(merge)

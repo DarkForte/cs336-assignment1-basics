@@ -12,8 +12,9 @@ from torch import Tensor
 from bpe import bpe
 from tokenizer import Tokenizer
 import transformer_blocks
-import transformer_training
+import transformer_optimizer
 import utils
+import train_utils
 
 
 def run_linear(
@@ -454,7 +455,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return train_utils.get_batch(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
@@ -505,7 +506,7 @@ def get_adamw_cls() -> type[torch.optim.Optimizer]:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    return transformer_training.AdamW
+    return transformer_optimizer.AdamW
 
 
 def run_get_lr_cosine_schedule(
@@ -533,7 +534,7 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    return transformer_training.cosine_schedule(
+    return transformer_optimizer.cosine_schedule(
         it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters
     )
 
@@ -554,7 +555,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    train_utils.save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -575,7 +576,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return train_utils.load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(

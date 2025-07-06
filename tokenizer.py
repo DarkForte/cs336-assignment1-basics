@@ -88,10 +88,17 @@ class Tokenizer:
         return ret.decode("utf-8", errors="replace")
     
 
+import numpy as np
 if __name__ == "__main__":
-    tokenizer = Tokenizer({0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at', 11: b'<|endoftext|>', 12: b'<|endoftext|><|endoftext|>'}, 
-[(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')], ["<|endoftext|>", "<|endoftext|><|endoftext|>"])
-    test_string = "Hello, how <|endoftext|><|endoftext|> are you?<|endoftext|>"
-    print(re.split("!", test_string))
-
-    print(tokenizer.encode(test_string))
+    import sys
+    import time
+    start_time = time.time()
+    tokenizer = Tokenizer.from_files(sys.argv[1], sys.argv[2], special_tokens=["<|endoftext|>"])
+    ret = []
+    with open(sys.argv[3], "rb") as f:
+        for line in f:
+            encoded = tokenizer.encode(line.decode("utf-8"))
+            ret.extend(encoded)
+    
+    np.save("tinystories_encoded.npy", np.array(ret, dtype=np.uint16))
+    print("Elapsed time: {:.2f} seconds".format(time.time() - start_time))
