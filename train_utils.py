@@ -15,8 +15,10 @@ def get_batch(dataset: np.ndarray, batch_size: int, context_length: int, device:
     - A tuple containing the batch of data and its corresponding labels.
     """
     indices = np.random.choice(len(dataset) - context_length, size=batch_size, replace=False)
-    batch = torch.from_numpy(np.array([dataset[i:i + context_length] for i in indices])).to(device)
-    labels = torch.from_numpy(np.array([dataset[i+1: i + context_length + 1] for i in indices])).to(device)
+    batch_indices = indices[:, None] + np.arange(context_length)
+    label_indices = indices[:, None] + np.arange(1, context_length + 1)
+    batch = torch.from_numpy(dataset[batch_indices]).to(device)
+    labels = torch.from_numpy(dataset[label_indices]).to(device)
     
     return batch, labels
 

@@ -6,14 +6,15 @@ def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
     """
     max_x = torch.max(x, dim=dim, keepdim=True).values
     exp_x = torch.exp(x - max_x)
-    print("exp_x: ", exp_x)
     sum_exp_x = torch.sum(exp_x, dim=dim, keepdim=True)
     return exp_x / sum_exp_x
 
 def cross_entropy_loss(logits, labels):
     max_logits = torch.max(logits, dim=-1, keepdim=True).values
     logits = logits - max_logits
-    correct_logits = logits[torch.arange(logits.size(0)), labels]
+    labels.unsqueeze_(-1)  # Ensure labels are of shape (batch, seq, 1)
+    # Gather the logits corresponding to the labels
+    correct_logits = logits.gather(dim=-1, index=labels.long()).squeeze(-1)  # Shape: (batch, seq)
     log_probs = torch.log(torch.exp(logits).sum(dim=-1))
     return (-correct_logits + log_probs).mean()
 

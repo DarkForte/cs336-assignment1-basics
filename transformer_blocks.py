@@ -32,7 +32,7 @@ class Embedding(torch.nn.Module):
         ))
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
-        return self.weight[token_ids]
+        return self.weight[token_ids.long()]  # token_ids should be of type LongTensor
     
 
 class RMSNorm(torch.nn.Module):
@@ -52,9 +52,9 @@ class RMSNorm(torch.nn.Module):
 class SwiGLU(torch.nn.Module):
     def __init__(self, d_model: int, d_ff: int, device=None, dtype=None):
         super().__init__()
-        self.w1 = Linear(d_model, d_ff)
-        self.w2 = Linear(d_ff, d_model)
-        self.w3 = Linear(d_model, d_ff)
+        self.w1 = Linear(d_model, d_ff, device, dtype)
+        self.w2 = Linear(d_ff, d_model, device, dtype)
+        self.w3 = Linear(d_model, d_ff, device, dtype)
 
     def silu(self, x: torch.Tensor) -> torch.Tensor:
         return x * torch.sigmoid(x)
@@ -113,10 +113,11 @@ class MultiheadSelfAttention(torch.nn.Module):
         else:
             self.rope = None
 
-        self.q_proj = Linear(d_model, d_model)
-        self.k_proj = Linear(d_model, d_model)
-        self.v_proj = Linear(d_model, d_model)
-        self.output_proj = Linear(d_model, d_model)
+        self.q_proj = Linear(d_model, d_model, device, dtype)
+        self.k_proj = Linear(d_model, d_model, device, dtype)
+        self.v_proj = Linear(d_model, d_model, device, dtype)
+        self.output_proj = Linear(d_model, d_model, device, dtype)
+        self.device = device
 
     def forward(self, x: torch.Tensor, token_positions: Optional[torch.Tensor] = None) -> torch.Tensor:
         seq_len = x.size(-2)
@@ -131,7 +132,7 @@ class MultiheadSelfAttention(torch.nn.Module):
             q = self.rope.forward(q, token_positions) 
             k = self.rope.forward(k, token_positions)
 
-        mask = einops.rearrange(torch.triu(torch.ones(seq_len, seq_len)).bool(), "r c -> c r")  # Lower triangular mask
+        mask = einops.rearrange(torch.triu(torch.ones(seq_len, seq_len, device=self.device)).bool(), "r c -> c r")  # Lower triangular mask
         multihead = scaled_dot_product_attention(q, k, v, mask)  # ... x seq_len x d_v
         multihead = einops.rearrange(multihead, '... head seq_len d_v -> ... seq_len (head d_v)', head=self.num_heads)
 
