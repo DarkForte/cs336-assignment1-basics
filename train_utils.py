@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import random
 
 def get_batch(dataset: np.ndarray, batch_size: int, context_length: int, device: str = 'cpu'):
     """
@@ -14,7 +15,7 @@ def get_batch(dataset: np.ndarray, batch_size: int, context_length: int, device:
     Returns:
     - A tuple containing the batch of data and its corresponding labels.
     """
-    indices = np.random.choice(len(dataset) - context_length, size=batch_size, replace=False)
+    indices = np.random.default_rng().choice(len(dataset) - context_length, size=batch_size, replace=False)
     batch_indices = indices[:, None] + np.arange(context_length)
     label_indices = indices[:, None] + np.arange(1, context_length + 1)
     batch = torch.from_numpy(dataset[batch_indices]).to(device)

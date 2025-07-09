@@ -24,7 +24,10 @@ parser.add_argument("--lr", type=float, default=1e-4)
 parser.add_argument("--beta1", type=float, default=0.9)
 parser.add_argument("--beta2", type=float, default=0.95)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
-parser.add_argument("--total_tokens", type=int, default=10000)
+parser.add_argument("--total_tokens", type=int, default=40000000)
+
+for k, v in vars(parser.parse_args()).items():
+    print(f"{k}: {v}")
 
 args = parser.parse_args()
 
@@ -45,13 +48,13 @@ optimizer = transformer_optimizer.AdamW(transformer_model.parameters(),
                                         weight_decay=args.weight_decay,
                                         eps=1e-8)
 
-dataset = np.load(args.dataset_path, mmap_mode='r')
+dataset = np.load(args.dataset_path, mmap_mode='r', allow_pickle=True)
 print("Data loaded successfully.")
 
+now_epoch = 0
 now_tokens = 0
 while now_tokens < args.total_tokens:
     batch, labels = train_utils.get_batch(dataset, args.batch_size, args.context_length, device=device)
-    print(batch)
     
     optimizer.zero_grad()
     logits = transformer_model.forward(batch)
@@ -62,7 +65,10 @@ while now_tokens < args.total_tokens:
     optimizer.step()
     
     now_tokens += args.batch_size * args.context_length
-    print(f"Processed {now_tokens} tokens, current loss: {loss.item()}")
+    now_epoch += 1
     
-    if now_tokens % 1000 == 0:
-        print(f"Processed {now_tokens} tokens, current loss: {loss.item()}")
+    if now_epoch % 100 == 0:
+        print(f"Epoch = {now_epoch}, Processed {now_tokens} tokens, current loss: {loss.item()}")
+
+print(f"Epoch = {now_epoch}, Processed {now_tokens} tokens, current loss: {loss.item()}, saving model.")
+train_utils.save_checkpoint(transformer_model, optimizer, now_tokens, "transformer_checkpoint.ckpt")

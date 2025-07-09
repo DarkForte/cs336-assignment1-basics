@@ -1,5 +1,6 @@
 import regex as re
 from typing import Iterable
+from collections import defaultdict
 
 class Tokenizer:
     def __init__(self, vocab: dict[int, bytes], merges: list[tuple[bytes, bytes]], special_tokens=None):
@@ -7,6 +8,7 @@ class Tokenizer:
         self.byte_to_id = {v: k for k, v in vocab.items()}
         self.merges = dict([(index, value) for value, index in enumerate(merges)])
         self.special_tokens = sorted(special_tokens, key=len, reverse=True) if special_tokens else []
+        self.known_mapping = defaultdict(list)
 
     @classmethod
     def from_files(cls, vocab_path, merges_path, special_tokens=None):
@@ -29,6 +31,8 @@ class Tokenizer:
         return first_pair
 
     def encode_word(self, word: str) -> list[int]:
+        if word in self.known_mapping:
+            return self.known_mapping[word]
         byte_list = tuple(bytes([x]) for x in word.encode("utf-8"))
         while True:
             merge = self.find_merge(byte_list)
@@ -55,6 +59,7 @@ class Tokenizer:
             if token in self.byte_to_id:
                 tokens.append(self.byte_to_id[token])
 
+        self.known_mapping[word] = tokens
         return tokens
 
     def encode(self, text) -> list[int]:
@@ -96,9 +101,17 @@ if __name__ == "__main__":
     tokenizer = Tokenizer.from_files(sys.argv[1], sys.argv[2], special_tokens=["<|endoftext|>"])
     ret = []
     with open(sys.argv[3], "rb") as f:
+        lines = 0
         for line in f:
             encoded = tokenizer.encode(line.decode("utf-8"))
             ret.extend(encoded)
+            lines += 1
+            if lines % 100000 == 0:
+                print(f"Processed {lines} lines, current length: {len(ret)}")
     
-    np.save("tinystories_encoded.npy", np.array(ret, dtype=np.uint16))
+    output = np.memmap("tinystories_encoded_mmap.npy", mode='w+', shape=(len(ret),), dtype=np.uint16)
+    output[:] = ret
+    output.flush()
+    del output  # Close the memmap file
+
     print("Elapsed time: {:.2f} seconds".format(time.time() - start_time))
