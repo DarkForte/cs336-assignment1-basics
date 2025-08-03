@@ -6,7 +6,7 @@ import transformer_blocks
 import tokenizer
 
 parser = argparse.ArgumentParser(description="Text generation with trained transformer")
-parser.add_argument("--checkpoint", type=str, default="transformer_checkpoint.ckpt")
+parser.add_argument("--checkpoint", type=str, default="transformer_checkpoint_lr0.001.ckpt")
 parser.add_argument("--vocab_path", type=str, default="tinystories_vocab.pickle")
 parser.add_argument("--merges_path", type=str, default="tinystories_merges.pickle")
 parser.add_argument("--prompt", type=str, required=True, help="Text prompt to start generation")
