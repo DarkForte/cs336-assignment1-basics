@@ -62,7 +62,7 @@ def train_with_params(model_args, dataset, total_tokens, param_name, param_value
         if step % 100 == 0:
             elapsed = time.time() - start_time
             tokens_per_sec = tokens_processed / elapsed
-            print(f"{param_name}: {param_value}, Tokens: {tokens_processed:,}, Loss: {loss.item():.4f}, Time: {elapsed:.1f}s, Tokens/sec: {tokens_per_sec:.1f}")
+            print(f"{param_name}: {param_value}, Tokens: {tokens_processed:,}, Steps: {step}, Loss: {loss.item():.4f}, Time: {elapsed:.1f}s, Tokens/sec: {tokens_per_sec:.1f}")
     
     checkpoint_name = f"transformer_checkpoint_{param_name}{param_value}.ckpt"
     train_utils.save_checkpoint(transformer_model, optimizer, tokens_processed, checkpoint_name)
